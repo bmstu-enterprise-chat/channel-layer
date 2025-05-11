@@ -73,28 +73,27 @@ import (
 
 // Определение констант для лучшей читаемости и легкого изменения
 const (
-	ListenPort         = ":8081"                       // Порт, на котором слушает веб-сервер
-	TransferEndpoint   = "/transfer"                   // Конечная точка для пересылки данных
-	CodeEndpoint       = "/code"                       // Конечная точка для приема входных данных
-	TransferURL        = "http://localhost:8080/transfer" // Полный URL целевого сервера (предполагается, что он запущен на 8080)
-	FixedPayloadSize   = 140                           // X: Фиксированный размер полезной нагрузки в байтах (после паддинга/до кодирования)
-	InfoBitsPerBlock   = 4                             // k: Количество информационных бит в блоке для кода [7,4]
-	CodedBitsPerBlock  = 7                             // n: Количество кодовых бит в блоке для кода [7,4]
-	PayloadBitLength   = FixedPayloadSize * 8          // Общее количество бит в полезной нагрузке (после паддинга)
-	NumCodingBlocks    = PayloadBitLength / InfoBitsPerBlock // Количество блоков [7,4] для кодирования (1120 / 4 = 280 блоков)
-	EncodedBitLength   = NumCodingBlocks * CodedBitsPerBlock // Общее количество бит после кодирования (280 * 7 = 1960 бит)
+	ListenPort        = ":8081"                             // Порт, на котором слушает веб-сервер
+	TransferEndpoint  = "/transfer"                         // Конечная точка для пересылки данных
+	CodeEndpoint      = "/code"                             // Конечная точка для приема входных данных
+	TransferURL       = "http://localhost:8080/transfer"    // Полный URL целевого сервера (предполагается, что он запущен на 8080)
+	FixedPayloadSize  = 140                                 // X: Фиксированный размер полезной нагрузки в байтах (после паддинга/до кодирования)
+	InfoBitsPerBlock  = 4                                   // k: Количество информационных бит в блоке для кода [7,4]
+	CodedBitsPerBlock = 7                                   // n: Количество кодовых бит в блоке для кода [7,4]
+	PayloadBitLength  = FixedPayloadSize * 8                // Общее количество бит в полезной нагрузке (после паддинга)
+	NumCodingBlocks   = PayloadBitLength / InfoBitsPerBlock // Количество блоков [7,4] для кодирования (1120 / 4 = 280 блоков)
+	EncodedBitLength  = NumCodingBlocks * CodedBitsPerBlock // Общее количество бит после кодирования (280 * 7 = 1960 бит)
 )
 
 // Segment представляет собой сегмент данных, передаваемый между уровнями.
 // Используется только внутри ChannelLayer.
 type Segment struct {
-	Payload       []byte `json:"payload"`         // Полезная нагрузка (часть текста или файла). Всегда FixedPayloadSize байт после паддинга.
-	Timestamp     int64  `json:"timestamp"`     // Временная метка отправителя (часть ID сообщения) в наносекундах.
+	Payload       []byte `json:"payload"`        // Полезная нагрузка (часть текста или файла). Всегда FixedPayloadSize байт после паддинга.
+	Timestamp     int64  `json:"timestamp"`      // Временная метка отправителя (часть ID сообщения) в наносекундах.
 	TotalSegments int    `json:"total_segments"` // Общее количество сегментов для исходного сообщения
 	SegmentNumber int    `json:"segment_number"` // Порядковый номер данного сегмента (начинается с 1)
 	// IsChannelError устанавливается Канальным уровнем, если декодирование сегмента не удалось
-	// (обнаружена неисправимая ошибка). Транспортный уровень может добавить свой флаг
-	// ошибки, если сегменты сообщения потеряны.
+	// (обнаружена неисправимая ошибка).
 	IsChannelError bool `json:"is_channel_error"`
 }
 
@@ -104,7 +103,7 @@ type IncomingCodeRequest struct {
 	TotalSegments int    `json:"total_segments"`
 	Sender        string `json:"sender"`
 	SendTime      string `json:"send_time"` // Приходит как строка
-	Payload       string `json:"payload"`       // Приходит как строка (может быть до FixedPayloadSize байт)
+	Payload       string `json:"payload"`   // Приходит как строка (может быть до FixedPayloadSize байт)
 }
 
 // OutgoingTransferRequest структура для формирования исходящего JSON на /transfer
@@ -113,7 +112,7 @@ type OutgoingTransferRequest struct {
 	TotalSegments int    `json:"total_segments"`
 	Sender        string `json:"sender"`
 	SendTime      string `json:"send_time"` // Отправляется как строка, как пришло
-	Payload       string `json:"payload"`       // Отправляется как строка (всегда FixedPayloadSize байт после паддинга и обработки)
+	Payload       string `json:"payload"`   // Отправляется как строка (всегда FixedPayloadSize байт после паддинга и обработки)
 }
 
 // APIError структура для стандартизированного ответа при ошибке
@@ -123,8 +122,8 @@ type APIError struct {
 
 // ChannelLayer симулирует ненадежный канал связи с потерями и ошибками в битах.
 type ChannelLayer struct {
-	ErrorProbability float64 // P: Вероятность ошибки в бите передаваемого *закодированного* кадра
-	LossProbability  float64 // R: Вероятность потери всего *закодированного* кадра
+	ErrorProbability float64    // P: Вероятность ошибки в бите передаваемого *закодированного* кадра
+	LossProbability  float64    // R: Вероятность потери всего *закодированного* кадра
 	rng              *rand.Rand // Собственный генератор случайных чисел для изоляции
 }
 
@@ -174,15 +173,15 @@ func (cl *ChannelLayer) ProcessSegment(inputSegment *Segment) *Segment {
 	bitStreamIn := bytesToBitStream(inputSegment.Payload) // FixedPayloadSize * 8 бит = 1120 бит
 
 	if len(bitStreamIn) != PayloadBitLength {
-         log.Printf("ChannelLayer ERROR: Внутренняя ошибка: Неверная длина потока битов после преобразования байт (%d), ожидалось %d. Помечаем как ошибку канала.", len(bitStreamIn), PayloadBitLength)
-          outputSegment := &Segment{
-             Payload:        nil,
-             Timestamp:      inputSegment.Timestamp,
-             TotalSegments:  inputSegment.TotalSegments,
-             SegmentNumber:  inputSegment.SegmentNumber,
-             IsChannelError: true,
-         }
-         return outputSegment
+		log.Printf("ChannelLayer ERROR: Внутренняя ошибка: Неверная длина потока битов после преобразования байт (%d), ожидалось %d. Помечаем как ошибку канала.", len(bitStreamIn), PayloadBitLength)
+		outputSegment := &Segment{
+			Payload:        nil,
+			Timestamp:      inputSegment.Timestamp,
+			TotalSegments:  inputSegment.TotalSegments,
+			SegmentNumber:  inputSegment.SegmentNumber,
+			IsChannelError: true,
+		}
+		return outputSegment
 	}
 
 	// Выделяем память под закодированный поток битов. Каждый блок из 4 бит кодируется в 7 бит.
@@ -190,7 +189,7 @@ func (cl *ChannelLayer) ProcessSegment(inputSegment *Segment) *Segment {
 
 	// Проходим по каждому блоку из 4 информационных бит и кодируем его.
 	for i := 0; i < NumCodingBlocks; i++ {
-		// Выбираем текущий блок информационных бит
+		// Выбираем текущий блок информационных битов
 		blockIn := bitStreamIn[i*InfoBitsPerBlock : (i+1)*InfoBitsPerBlock]
 		// Кодируем блок
 		blockOut := cyclicEncode7_4Block(blockIn)
@@ -198,7 +197,6 @@ func (cl *ChannelLayer) ProcessSegment(inputSegment *Segment) *Segment {
 		copy(encodedBitStream[i*CodedBitsPerBlock:(i+1)*CodedBitsPerBlock], blockOut)
 	}
 	log.Printf("ChannelLayer: Закодировано %d бит в %d бит (блоков [7,4]: %d)", PayloadBitLength, EncodedBitLength, NumCodingBlocks)
-
 
 	// 2. Симуляция потери кадра
 	if cl.rng.Float64() <= cl.LossProbability {
@@ -209,16 +207,15 @@ func (cl *ChannelLayer) ProcessSegment(inputSegment *Segment) *Segment {
 
 	// 3. Симуляция ошибки в бите (только если кадр не потерян)
 	// С вероятностью ErrorProbability, инвертируем один случайный бит в *закодированном* потоке.
-	if cl.rng.Float64() <= cl.ErrorProbability {
+	if cl.rng.Float64() <= cl.ErrorProbability { // Используем Float66 для лучшего распределения
 		// Выбираем случайный индекс бита в закодированном потоке (длиной EncodedBitLength)
 		errorBitIndex := cl.rng.Intn(EncodedBitLength)
 		// Инвертируем бит: если 0, становится 1; если 1, становится 0.
 		encodedBitStream[errorBitIndex] = 1 - encodedBitStream[errorBitIndex]
 		log.Printf("ChannelLayer: Симуляция ошибки в бите по индексу %d в закодированном потоке", errorBitIndex)
 	} else {
-         log.Println("ChannelLayer: Ошибка в бите не симулирована.")
-    }
-
+		log.Println("ChannelLayer: Ошибка в бите не симулирована.")
+	}
 
 	// 4. Декодирование полезной нагрузки с использованием кода [7,4]
 	// Выделяем память под декодированный поток битов (должен быть такого же размера, как и исходный поток битов)
@@ -245,31 +242,32 @@ func (cl *ChannelLayer) ProcessSegment(inputSegment *Segment) *Segment {
 
 	// Проверка, что декодированный payload имеет правильный размер (после обратного преобразования из битов).
 	if len(decodedPayload) != FixedPayloadSize {
-        log.Printf("ChannelLayer ERROR: Внутренняя ошибка: Неверная длина полезной нагрузки после декодирования битов (%d), ожидалось %d. Помечаем как ошибку канала.", len(decodedPayload), FixedPayloadSize)
-        channelErrorDetected = true // Считаем это неисправимой ошибкой
-         outputSegment := &Segment{
-             Payload:        nil, // Payload не может быть корректным
-             Timestamp:      inputSegment.Timestamp,
-             TotalSegments:  inputSegment.TotalSegments,
-             SegmentNumber:  inputSegment.SegmentNumber,
-             IsChannelError: true,
-         }
-         return outputSegment
-    }
-
-    // Создаем итоговый сегмент с декодированной полезной нагрузкой и флагом ошибки.
-	outputSegment := &Segment{
-		Payload:       decodedPayload,
-		Timestamp:     inputSegment.Timestamp,
-		TotalSegments: inputSegment.TotalSegments,
-		SegmentNumber: inputSegment.SegmentNumber,
-		IsChannelError: channelErrorDetected, // Устанавливаем флаг на основе результатов декодирования
+		log.Printf("ChannelLayer ERROR: Внутренняя ошибка: Неверная длина полезной нагрузки после декодирования битов (%d), ожидалось %d. Помечаем как ошибку канала.", len(decodedPayload), FixedPayloadSize)
+		channelErrorDetected = true // Считаем это неисправимой ошибкой
+		outputSegment := &Segment{
+			Payload:        nil, // Payload не может быть корректным
+			Timestamp:      inputSegment.Timestamp,
+			TotalSegments:  inputSegment.TotalSegments,
+			SegmentNumber:  inputSegment.SegmentNumber,
+			IsChannelError: true,
+		}
+		return outputSegment
 	}
 
 	if channelErrorDetected {
 		log.Println("ChannelLayer: Обнаружена неисправимая ошибка при декодировании.")
 	} else {
 		log.Println("ChannelLayer: Декодирование успешно (ошибка отсутствовала или была исправлена).")
+	}
+
+	// Создаем итоговый сегмент с декодированной полезной нагрузкой и флагом ошибки.
+	// Флаг IsChannelError установлен выше, если была обнаружена неисправимая ошибка.
+	outputSegment := &Segment{
+		Payload:        decodedPayload,
+		Timestamp:      inputSegment.Timestamp,
+		TotalSegments:  inputSegment.TotalSegments,
+		SegmentNumber:  inputSegment.SegmentNumber,
+		IsChannelError: channelErrorDetected,
 	}
 
 	return outputSegment
@@ -288,9 +286,9 @@ func (cl *ChannelLayer) ProcessSegment(inputSegment *Segment) *Segment {
 // r2 = i1 + i2 + i3
 // Кодовое слово имеет структуру (i3, i2, i1, i0, r2, r1, r0).
 func cyclicEncode7_4Block(infoBits []uint8) []uint8 {
-    // Проверка длины входных данных, хотя на практике здесь всегда должно быть InfoBitsPerBlock (4 бита)
+	// Проверка длины входных данных, хотя на практике здесь всегда должно быть InfoBitsPerBlock (4 бита)
 	if len(infoBits) != InfoBitsPerBlock {
-        log.Printf("ChannelLayer ERROR: Внутренняя ошибка: Неверная длина входного блока для кодера [7,4]: %d бит, ожидалось %d. Возвращаем нулевой блок.", len(infoBits), InfoBitsPerBlock)
+		log.Printf("ChannelLayer ERROR: Внутренняя ошибка: Неверная длина входного блока для кодера [7,4]: %d бит, ожидалось %d. Возвращаем нулевой блок.", len(infoBits), InfoBitsPerBlock)
 		return make([]uint8, CodedBitsPerBlock) // Возвращаем нулевой блок при ошибке
 	}
 	// Информационные биты: i3 i2 i1 i0
@@ -344,10 +342,10 @@ func cyclicDecode7_4Block(codedBits []uint8) ([]uint8, bool) {
 	// Ошибка обнаружена, если синдром не равен нулю.
 	detectedError := !syndromeIsZero
 
-    // Декодированные информационные биты берутся из принятых битов на позициях информационных битов.
-    // В этой реализации декодер не исправляет ошибки, поэтому просто возвращает принятые биты.
-    // Если бы была коррекция, эти биты могли бы быть изменены на основе синдрома.
-    decodedInfoBits := []uint8{v6, v5, v4, v3}
+	// Декодированные информационные биты берутся из принятых битов на позициях информационных битов.
+	// В этой реализации декодер не исправляет ошибки, поэтому просто возвращает принятые биты.
+	// Если бы была коррекция, эти биты могли бы быть изменены на основе синдрома.
+	decodedInfoBits := []uint8{v6, v5, v4, v3}
 
 	return decodedInfoBits, detectedError
 }
@@ -410,44 +408,41 @@ func handleCode(w http.ResponseWriter, r *http.Request) {
 	var req IncomingCodeRequest
 	decoder := json.NewDecoder(r.Body)
 	// Ограничиваем размер читаемого тела запроса, чтобы избежать злонамеренных запросов
-	// (например, отправка очень большого payload)
-    // Допустим, максимальный размер payload + JSON оверхед не должен превышать некий лимит.
-    // Учитывая, что payload сам по себе до 140 байт, разумный лимит может быть, например, 1KB.
+	// Учитывая, что payload сам по себе до 140 байт, разумный лимит может быть, например, 1KB.
 	r.Body = http.MaxBytesReader(w, r.Body, 1024) // Ограничение до 1 KB
 	if err := decoder.Decode(&req); err != nil {
-        // Проверяем, не была ли ошибка из-за превышения лимита
-        if _, ok := err.(*http.MaxBytesError); ok {
-             sendErrorResponse(w, fmt.Sprintf("Request body too large. Maximum allowed is %d bytes.", 1024), http.StatusRequestEntityTooLarge)
-             return
-        }
+		// Проверяем, не была ли ошибка из-за превышения лимита
+		if _, ok := err.(*http.MaxBytesError); ok {
+			sendErrorResponse(w, fmt.Sprintf("Request body too large. Maximum allowed is %d bytes.", 1024), http.StatusRequestEntityTooLarge)
+			return
+		}
 		sendErrorResponse(w, fmt.Sprintf("Failed to decode JSON request: %v", err), http.StatusBadRequest)
 		return
 	}
 
-    // Валидация размера полезной нагрузки: должна быть больше 0 и не более FixedPayloadSize
-    originalPayloadBytes := []byte(req.Payload)
+	// Валидация размера полезной нагрузки: должна быть больше 0 и не более FixedPayloadSize
+	originalPayloadBytes := []byte(req.Payload)
 	if len(originalPayloadBytes) == 0 {
 		sendErrorResponse(w, "Invalid payload size: payload cannot be empty.", http.StatusBadRequest)
 		return
 	}
-    if len(originalPayloadBytes) > FixedPayloadSize {
-        sendErrorResponse(w, fmt.Sprintf("Invalid payload size: expected %d bytes or less, got %d. Payload size exceeds maximum allowed.", FixedPayloadSize, len(originalPayloadBytes)), http.StatusBadRequest)
-        return
-    }
-
+	if len(originalPayloadBytes) > FixedPayloadSize {
+		sendErrorResponse(w, fmt.Sprintf("Invalid payload size: expected %d bytes or less, got %d. Payload size exceeds maximum allowed.", FixedPayloadSize, len(originalPayloadBytes)), http.StatusBadRequest)
+		return
+	}
 
 	// --- Паддинг полезной нагрузки до FixedPayloadSize байт ---
 	paddedPayloadBytes := make([]byte, FixedPayloadSize)
 	// Копируем оригинальные данные в начало нового среза.
-	// Остаток среза будет заполнен нулевыми байтами (\x00) по умолчанию, что является стандартным методом паддинга.
+	// Остаток среза будет заполнен нулевыми байтами (\x00) по умолчанию.
 	copy(paddedPayloadBytes, originalPayloadBytes)
 	// ---------------------------------------------
 
 	// Парсинг строки send_time в time.Time
-	// Пытаемся распарсить в формате RFC3339 (рекомендуется для обмена данными через API)
+	// Пытаемся распарсить в формате RFC3339 (рекомендуется)
 	parsedTime, err := time.Parse(time.RFC3339, req.SendTime)
 	if err != nil {
-		// Если RFC3339 не сработал, пробуем исходный формат из примера на случай, если используется он
+		// Если RFC3339 не сработал, пробуем исходный формат из примера
 		parsedTime, err = time.Parse("2006-01-02 15:04:05 -0700 MST", req.SendTime)
 		if err != nil {
 			sendErrorResponse(w, fmt.Sprintf("Failed to parse send_time '%s': %v. Expected format like RFC3339 (e.g., '2006-01-02T15:04:05Z') or '2006-01-02 15:04:05 -0700 MST'.", req.SendTime, err), http.StatusBadRequest)
@@ -457,8 +452,8 @@ func handleCode(w http.ResponseWriter, r *http.Request) {
 
 	// Подготовка внутренней структуры Segment для обработки ChannelLayer
 	internalSegment := &Segment{
-		Payload:       paddedPayloadBytes,       // Используем паддированную полезную нагрузку (FixedPayloadSize байт)
-		Timestamp:     parsedTime.UnixNano(),    // Используем метку времени в наносекундах
+		Payload:       paddedPayloadBytes,    // Используем паддированную полезную нагрузку (FixedPayloadSize байт)
+		Timestamp:     parsedTime.UnixNano(), // Используем метку времени в наносекундах
 		TotalSegments: req.TotalSegments,
 		SegmentNumber: req.SegmentNumber,
 		// IsChannelError будет установлен ChannelLayer
@@ -470,74 +465,92 @@ func handleCode(w http.ResponseWriter, r *http.Request) {
 	// Обработка сегмента с использованием ChannelLayer
 	processedSegment := channelLayer.ProcessSegment(internalSegment)
 
-	// Проверка результатов обработки
+	// --- Проверка результатов обработки канальным уровнем ---
 	if processedSegment == nil {
 		// Сегмент был потерян
 		log.Printf("Web Server: Сегмент #%d/%d потерян во время симуляции канала.", req.SegmentNumber, req.TotalSegments)
-		sendErrorResponse(w, "Segment lost during channel simulation", http.StatusRequestTimeout) // или другой подходящий статус
+		sendErrorResponse(w, "Segment lost during channel simulation", http.StatusRequestTimeout) // 408 Request Timeout - разумный статус для потери
 		return
 	}
 
 	if processedSegment.IsChannelError {
 		// Канальный уровень обнаружил неисправимую ошибку
-		log.Printf("Web Server: Канальный уровень обнаружил неисправимую ошибку для сегмента #%d/%d.", req.SegmentNumber, req.TotalSegments)
-		sendErrorResponse(w, "Uncorrectable channel error detected during processing", http.StatusInternalServerError) // или StatusBadRequest в зависимости от интерпретации
+		log.Printf("Web Server: Канальный уровень обнаружил неисправимую ошибку для сегмента #%d/%d. Отправка ответа с ошибкой (Статус 500).", req.SegmentNumber, req.TotalSegments)
+		// Возвращаем 500, как запрошено, если канальный уровень не справился
+		sendErrorResponse(w, "Uncorrectable channel error detected during processing", http.StatusInternalServerError)
 		return
 	}
+	// --- Конец проверки результатов обработки канальным уровнем ---
 
-	// Обработка прошла успешно (или ошибка была исправлена/отсутствовала).
-	// Теперь готовим и отправляем сегмент на конечную точку /transfer.
+	// --- Обработка прошла успешно (нет потери, нет неисправимой ошибки). Теперь отправляем на /transfer ---
 
-	// ВАЖНО: Исходящий JSON должен использовать *оригинальные* поля из входящего запроса,
-	// кроме полезной нагрузки, которая берется из processedSegment (преобразована обратно в строку).
-	// Обработанная полезная нагрузка всегда будет FixedPayloadSize байт (преобразована в строку).
+	// Используем обработанную полезную нагрузку из processedSegment и конвертируем ее обратно в строку.
+	// Она всегда будет FixedPayloadSize байт.
 	outgoingPayloadString := string(processedSegment.Payload)
 
 	outgoingRequest := OutgoingTransferRequest{
-		SegmentNumber: req.SegmentNumber,       // Используем оригинал
-		TotalSegments: req.TotalSegments,       // Используем оригинал
-		Sender:        req.Sender,             // Используем оригинал
-		SendTime:      req.SendTime,           // Используем оригинальный строковый формат
-		Payload:       outgoingPayloadString, // Используем обработанную и паддированную полезную нагрузку (как строку, всегда FixedPayloadSize символов/байт)
+		SegmentNumber: req.SegmentNumber,     // Используем оригинал из входящего запроса
+		TotalSegments: req.TotalSegments,     // Используем оригинал из входящего запроса
+		Sender:        req.Sender,            // Используем оригинал из входящего запроса
+		SendTime:      req.SendTime,          // Используем оригинальный строковый формат из входящего запроса
+		Payload:       outgoingPayloadString, // Используем обработанную (декодированную) и паддированную полезную нагрузку (как строку, всегда FixedPayloadSize символов/байт)
 	}
 
 	outgoingJSON, err := json.Marshal(outgoingRequest)
 	if err != nil {
-		sendErrorResponse(w, fmt.Sprintf("Failed to marshal outgoing JSON: %v", err), http.StatusInternalServerError)
+		log.Printf("Web Server ERROR: Не удалось сериализовать исходящий JSON для сегмента #%d/%d: %v", req.SegmentNumber, req.TotalSegments, err)
+		sendErrorResponse(w, fmt.Sprintf("Failed to marshal outgoing JSON: %v", err), http.StatusInternalServerError) // 500, т.к. внутренняя ошибка при подготовке к отправке
 		return
 	}
 
-	log.Printf("Web Server: Обработка успешна, отправка сегмента #%d/%d на %s с размером полезной нагрузки %d",
+	log.Printf("Web Server: Обработка канальным уровнем успешна. Отправка сегмента #%d/%d на %s с размером полезной нагрузки %d",
 		req.SegmentNumber, req.TotalSegments, TransferURL, len(outgoingRequest.Payload))
 
 	// Отправка POST запроса на конечную точку /transfer
 	resp, err := http.Post(TransferURL, "application/json", bytes.NewBuffer(outgoingJSON))
 	if err != nil {
-		// Ошибка при отправке запроса на целевой сервер
-		log.Printf("Web Server ERROR: Не удалось отправить сегмент на целевую конечную точку (%s): %v", TransferURL, err)
-		// В соответствии с инструкцией, если обработка прошла успешно, отвечаем OK, но логируем ошибку отправки.
-        // Однако, в реальной системе здесь, вероятно, стоило бы вернуть ошибку клиенту.
-        // Давайте придерживаться текущей логики: если *обработка* успешна, отвечаем OK.
-        w.WriteHeader(http.StatusOK) // Успех обработки, несмотря на ошибку отправки
-        json.NewEncoder(w).Encode(map[string]string{"status": "Processing successful, but failed to send to transfer endpoint", "error": err.Error()})
-        log.Printf("Web Server: Ответили на /code для сегмента #%d/%d со статусом OK (но с ошибкой отправки)", req.SegmentNumber, req.TotalSegments)
+		// Ошибка при отправке запроса на целевой сервер (например, целевой сервер недоступен)
+		log.Printf("Web Server ERROR: Не удалось отправить сегмент #%d/%d на целевую конечную точку (%s): %v", req.SegmentNumber, req.TotalSegments, TransferURL, err)
+		// Отправляем 500, т.к. конечный этап (отправка) не удался
+		sendErrorResponse(w, fmt.Sprintf("Failed to send segment to transfer endpoint: %v", err), http.StatusInternalServerError)
 		return
 	}
 	defer resp.Body.Close()
 
 	// Чтение ответа от конечной точки /transfer (опционально, для логирования/отладки)
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Printf("Web Server WARNING: Не удалось прочитать тело ответа от конечной точки /transfer: %v", err)
+	body, errReadBody := io.ReadAll(resp.Body)
+	if errReadBody != nil {
+		log.Printf("Web Server WARNING: Не удалось прочитать тело ответа от конечной точки /transfer для сегмента #%d/%d: %v", req.SegmentNumber, req.TotalSegments, errReadBody)
 	} else {
-		log.Printf("Web Server: Получен ответ от конечной точки /transfer (Status: %s): %s", resp.Status, string(body))
+		log.Printf("Web Server: Получен ответ от конечной точки /transfer для сегмента #%d/%d (Status: %s): %s", req.SegmentNumber, req.TotalSegments, resp.Status, string(body))
 	}
 
-	// Отвечаем исходному клиенту на /code, указывая на успешную обработку и попытку отправки
-	// Как указано в инструкциях, если обработка прошла успешно, отвечаем OK, независимо от статуса ответа целевого сервера.
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "Processing successful, transfer attempted", "transfer_status": resp.Status}) // Добавляем статус от transfer
-	log.Printf("Web Server: Ответили на /code для сегмента #%d/%d со статусом OK (статус transfer: %s)", req.SegmentNumber, req.TotalSegments, resp.Status)
+	// --- Проверяем статус ответа от /transfer и определяем итоговый статус ответа на /code ---
+	if resp.StatusCode == http.StatusOK {
+		// Канальный уровень успешно обработал сегмент И /transfer вернул 200.
+		// Это полное успешное выполнение для данного сегмента. Отвечаем 200.
+		w.WriteHeader(http.StatusOK)
+		responseMsg := map[string]interface{}{
+			"status":          "Segment processed by channel layer and transferred successfully",
+			"transfer_status": resp.Status,
+		}
+		if body != nil {
+			responseMsg["transfer_response_body"] = string(body)
+		}
+		json.NewEncoder(w).Encode(responseMsg)
+		log.Printf("Web Server: Ответили на /code для сегмента #%d/%d со статусом OK (статус transfer: %s)", req.SegmentNumber, req.TotalSegments, resp.Status)
+	} else {
+		// Канальный уровень обработал успешно, но /transfer вернул НЕ 200 статус.
+		// Это означает, что отправка на следующий уровень не удалась.
+		// Отвечаем 500, так как весь процесс для данного сегмента не завершился успехом.
+		errMsg := fmt.Sprintf("Transfer to endpoint failed with status: %s", resp.Status)
+		if body != nil && len(body) > 0 {
+			errMsg += fmt.Sprintf(". Transfer response body: %s", string(body))
+		}
+		log.Printf("Web Server: Ответили на /code для сегмента #%d/%d со статусом 500 (статус transfer: %s)", req.SegmentNumber, req.TotalSegments, resp.Status)
+		sendErrorResponse(w, errMsg, http.StatusInternalServerError)
+	}
+	// --- Конец проверки статуса /transfer ---
 }
 
 // sendErrorResponse отправляет стандартизированный JSON ответ с ошибкой и логирует ее.
@@ -545,9 +558,12 @@ func sendErrorResponse(w http.ResponseWriter, message string, statusCode int) {
 	log.Printf("Web Server: Отправка ответа с ошибкой (Статус %d): %s", statusCode, message)
 	w.WriteHeader(statusCode)
 	errorResponse := APIError{Error: message}
-	json.NewEncoder(w).Encode(errorResponse)
+	// Убедимся, что мы можем записать JSON ответа об ошибке. Если нет, просто закрываем соединение после установки заголовка.
+	if err := json.NewEncoder(w).Encode(errorResponse); err != nil {
+		log.Printf("Web Server ERROR: Не удалось записать JSON ответа об ошибке: %v", err)
+		// Нет смысла пытаться отправить JSON еще раз, просто завершаем обработку запроса.
+	}
 }
-
 
 func main() {
 	// Инициализация канального уровня с заданными вероятностями ошибки и потери
