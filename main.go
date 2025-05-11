@@ -568,7 +568,7 @@ func sendErrorResponse(w http.ResponseWriter, message string, statusCode int) {
 func main() {
 	// Инициализация канального уровня с заданными вероятностями ошибки и потери
 	// При необходимости эти значения можно вынести в аргументы командной строки или файл конфигурации.
-	channelLayer = NewChannelLayer(0.05, 0.01) // Пример: P=0.05 (5% ошибки в бите), R=0.01 (1% потери кадра)
+	channelLayer = NewChannelLayer(0.1, 0.02) // Пример: P=0.1 (10% ошибки в бите), R=0.02 (2% потери кадра)
 
 	log.Println("--- Запуск веб-сервера на", ListenPort, "---")
 	log.Println("Прослушивание POST запросов на", CodeEndpoint)
