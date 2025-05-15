@@ -401,7 +401,7 @@ func handleCode(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	if r.Method != http.MethodPost {
-		sendErrorResponse(w, "Method not allowed", http.StatusMethodNotAllowed)
+		sendErrorResponse(w, "Метод не допускается", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -413,21 +413,21 @@ func handleCode(w http.ResponseWriter, r *http.Request) {
 	if err := decoder.Decode(&req); err != nil {
 		// Проверяем, не была ли ошибка из-за превышения лимита
 		if _, ok := err.(*http.MaxBytesError); ok {
-			sendErrorResponse(w, fmt.Sprintf("Request body too large. Maximum allowed is %d bytes.", 1024), http.StatusRequestEntityTooLarge)
+			sendErrorResponse(w, fmt.Sprintf("Тело запроса слишком большое. Максимально допустимый размер — %d байт.", 1024), http.StatusRequestEntityTooLarge)
 			return
 		}
-		sendErrorResponse(w, fmt.Sprintf("Failed to decode JSON request: %v", err), http.StatusBadRequest)
+		sendErrorResponse(w, fmt.Sprintf("Не удалось декодировать запрос JSON: %v", err), http.StatusBadRequest)
 		return
 	}
 
 	// Валидация размера полезной нагрузки: должна быть больше 0 и не более FixedPayloadSize
 	originalPayloadBytes := []byte(req.Payload)
 	if len(originalPayloadBytes) == 0 {
-		sendErrorResponse(w, "Invalid payload size: payload cannot be empty.", http.StatusBadRequest)
+		sendErrorResponse(w, "Недопустимый размер полезной нагрузки: полезная нагрузка не может быть пустой.", http.StatusBadRequest)
 		return
 	}
 	if len(originalPayloadBytes) > FixedPayloadSize {
-		sendErrorResponse(w, fmt.Sprintf("Invalid payload size: expected %d bytes or less, got %d. Payload size exceeds maximum allowed.", FixedPayloadSize, len(originalPayloadBytes)), http.StatusBadRequest)
+		sendErrorResponse(w, fmt.Sprintf("Неверный размер полезной нагрузки: ожидалось %d байт или меньше, получено %d. Размер полезной нагрузки превышает максимально допустимый.", FixedPayloadSize, len(originalPayloadBytes)), http.StatusBadRequest)
 		return
 	}
 
@@ -445,7 +445,7 @@ func handleCode(w http.ResponseWriter, r *http.Request) {
 		// Если RFC3339 не сработал, пробуем исходный формат из примера
 		parsedTime, err = time.Parse("2006-01-02 15:04:05 -0700 MST", req.SendTime)
 		if err != nil {
-			sendErrorResponse(w, fmt.Sprintf("Failed to parse send_time '%s': %v. Expected format like RFC3339 (e.g., '2006-01-02T15:04:05Z') or '2006-01-02 15:04:05 -0700 MST'.", req.SendTime, err), http.StatusBadRequest)
+			sendErrorResponse(w, fmt.Sprintf("Не удалось проанализировать send_time '%s': %v. Ожидается формат, аналогичный RFC3339 (например, '2006-01-02T15:04:05Z') или '2006-01-02 15:04:05 -0700 MST'.", req.SendTime, err), http.StatusBadRequest)
 			return
 		}
 	}
@@ -469,7 +469,7 @@ func handleCode(w http.ResponseWriter, r *http.Request) {
 	if processedSegment == nil {
 		// Сегмент был потерян
 		log.Printf("Web Server: Сегмент #%d/%d потерян во время симуляции канала.", req.SegmentNumber, req.TotalSegments)
-		sendErrorResponse(w, "Segment lost during channel simulation", http.StatusRequestTimeout) // 408 Request Timeout - разумный статус для потери
+		sendErrorResponse(w, "Сегмент потерян во время моделирования канала", http.StatusRequestTimeout) // 408 Request Timeout - разумный статус для потери
 		return
 	}
 
@@ -477,7 +477,7 @@ func handleCode(w http.ResponseWriter, r *http.Request) {
 		// Канальный уровень обнаружил неисправимую ошибку
 		log.Printf("Web Server: Канальный уровень обнаружил неисправимую ошибку для сегмента #%d/%d. Отправка ответа с ошибкой (Статус 500).", req.SegmentNumber, req.TotalSegments)
 		// Возвращаем 500, как запрошено, если канальный уровень не справился
-		sendErrorResponse(w, "Uncorrectable channel error detected during processing", http.StatusInternalServerError)
+		sendErrorResponse(w, "Во время обработки обнаружена неисправимая ошибка канала", http.StatusInternalServerError)
 		return
 	}
 	// --- Конец проверки результатов обработки канальным уровнем ---
@@ -499,7 +499,7 @@ func handleCode(w http.ResponseWriter, r *http.Request) {
 	outgoingJSON, err := json.Marshal(outgoingRequest)
 	if err != nil {
 		log.Printf("Web Server ERROR: Не удалось сериализовать исходящий JSON для сегмента #%d/%d: %v", req.SegmentNumber, req.TotalSegments, err)
-		sendErrorResponse(w, fmt.Sprintf("Failed to marshal outgoing JSON: %v", err), http.StatusInternalServerError) // 500, т.к. внутренняя ошибка при подготовке к отправке
+		sendErrorResponse(w, fmt.Sprintf("Не удалось упорядочить исходящий JSON: %v", err), http.StatusInternalServerError) // 500, т.к. внутренняя ошибка при подготовке к отправке
 		return
 	}
 
@@ -512,7 +512,7 @@ func handleCode(w http.ResponseWriter, r *http.Request) {
 		// Ошибка при отправке запроса на целевой сервер (например, целевой сервер недоступен)
 		log.Printf("Web Server ERROR: Не удалось отправить сегмент #%d/%d на целевую конечную точку (%s): %v", req.SegmentNumber, req.TotalSegments, TransferURL, err)
 		// Отправляем 500, т.к. конечный этап (отправка) не удался
-		sendErrorResponse(w, fmt.Sprintf("Failed to send segment to transfer endpoint: %v", err), http.StatusInternalServerError)
+		sendErrorResponse(w, fmt.Sprintf("Не удалось отправить сегмент в конечную точку передачи: %v", err), http.StatusInternalServerError)
 		return
 	}
 	defer resp.Body.Close()
@@ -531,7 +531,7 @@ func handleCode(w http.ResponseWriter, r *http.Request) {
 		// Это полное успешное выполнение для данного сегмента. Отвечаем 200.
 		w.WriteHeader(http.StatusOK)
 		responseMsg := map[string]interface{}{
-			"status":          "Segment processed by channel layer and transferred successfully",
+			"status":          "Сегмент обработан канальным уровнем и успешно передан.",
 			"transfer_status": resp.Status,
 		}
 		if body != nil {
